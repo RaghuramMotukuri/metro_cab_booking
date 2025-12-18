@@ -4,6 +4,7 @@ import qrcode
 from io import BytesIO
 import base64
 import uuid
+import urllib.parse # Added for URL encoding
 
 # ---------------- CONFIGURATION ----------------
 st.set_page_config(page_title="Metro & Cab Booking", page_icon="🎫", layout="centered")
@@ -14,16 +15,17 @@ if 'step' not in st.session_state:
 if 'booking_data' not in st.session_state:
     st.session_state.booking_data = {}
 
-# ---------------- CUSTOM CSS (Enhanced) ----------------
+# ---------------- CUSTOM CSS ----------------
 st.markdown("""
 <style>
     .stButton>button { width: 100%; border-radius: 8px; height: 3em; font-weight: bold; }
     .price-box { background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #28a745; margin: 10px 0; }
     .ticket-card { background-color: white; border-radius: 15px; padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 8px solid #28a745; }
     .ticket-header { text-align: center; color: #28a745; font-weight: 800; border-bottom: 2px dashed #eee; padding-bottom: 10px; margin-bottom: 15px; }
-    .ticket-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #f9f9f9; }
+    .ticket-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f9f9f9; }
     .ticket-label { color: #888; font-size: 12px; font-weight: 600; text-transform: uppercase; }
     .ticket-value { font-weight: 700; color: #333; }
+    .qr-container { text-align: center; background: white; padding: 20px; border-radius: 15px; border: 2px solid #eee; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -47,7 +49,6 @@ def reset_app():
 # STEP 1: BOOKING FORM
 if st.session_state.step == 'form':
     st.title("🚇 Metro Smart Book")
-    st.write("Plan your journey and connecting ride.")
     
     with st.container(border=True):
         name = st.text_input("Passenger Name", placeholder="e.g. John Doe")
@@ -68,7 +69,7 @@ if st.session_state.step == 'form':
         if cab_req:
             drop_loc = st.text_input("Final Drop Location", placeholder="Enter specific destination...")
 
-        # Dynamic Pricing Logic
+        # Pricing
         base_fare = 40
         cab_fare = 150 if cab_req else 0
         total_amt = (base_fare * tickets) + cab_fare
@@ -94,72 +95,75 @@ if st.session_state.step == 'form':
                 st.session_state.step = 'payment'
                 st.rerun()
 
-# STEP 2: PAYMENT GATEWAY
+# STEP 2: PAYMENT GATEWAY (QR WORKING)
 elif st.session_state.step == 'payment':
-    st.title("💳 Secure Payment")
-    data = st.session_state.booking_data
+    st.title("💳 Scan to Pay")
+    d = st.session_state.booking_data
     
-    st.info(f"Amount Payable: **₹{data['total']}**")
+    # Generate UPI URL (Standard Format)
+    # Replace 'yourname@upi' with a real UPI ID to receive actual money
+    upi_id = "merchant@upi" 
+    transaction_note = urllib.parse.quote(f"Metro Ticket {d['id']}")
+    upi_url = f"upi://pay?pa={upi_id}&pn=MetroSmartBook&am={d['total']}&tn={transaction_note}&cu=INR"
     
-    pay_col1, pay_col2 = st.columns(2)
-    with pay_col1:
-        st.radio("Select Payment Method", ["UPI / QR", "Credit Card", "Net Banking"])
-    
-    with pay_col2:
-        st.write("Summary:")
-        st.caption(f"Tickets: {data['tickets']} x Metro Pass")
-        if data['cab']: st.caption("Add-on: Connecting Cab")
+    payment_qr = generate_qr(upi_url)
 
-    if st.button("Pay Now"):
-        progress_bar = st.progress(0)
-        for percent_complete in range(100):
-            time.sleep(0.01)
-            progress_bar.progress(percent_complete + 1)
-        
-        st.success("Payment Successful!")
-        time.sleep(1)
-        st.session_state.step = 'ticket'
-        st.rerun()
+    col1, col2 = st.columns([1.2, 1])
     
-    if st.button("Cancel", variant="secondary"):
-        st.session_state.step = 'form'
-        st.rerun()
+    with col1:
+        st.markdown(f"""
+        <div class="qr-container">
+            <p style="margin-bottom:10px; font-weight:bold; color:#555;">Scan with GPay, PhonePe, or Paytm</p>
+            <img src="data:image/png;base64,{payment_qr}" width="220">
+            <h3 style="color:#28a745; margin-top:10px;">₹{d['total']}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.write("### Payment Summary")
+        st.write(f"**Passenger:** {d['name']}")
+        st.write(f"**Journey:** {d['from']} ➝ {d['to']}")
+        st.info("After completing the payment in your app, click the button below to generate your ticket.")
+        
+        if st.button("Verify & Generate Ticket", type="primary"):
+            with st.spinner("Confirming transaction..."):
+                time.sleep(2) # Simulating bank verification
+                st.session_state.step = 'ticket'
+                st.rerun()
+        
+        if st.button("Cancel & Go Back"):
+            st.session_state.step = 'form'
+            st.rerun()
 
 # STEP 3: FINAL TICKET
 elif st.session_state.step == 'ticket':
     st.balloons()
-    st.title("🎟️ Your Digital Ticket")
+    st.title("🎟️ Booking Confirmed!")
     
     d = st.session_state.booking_data
-    qr_payload = f"TID:{d['id']}|NAME:{d['name']}|FARE:{d['total']}"
-    qr_img = generate_qr(qr_payload)
+    qr_payload = f"TID:{d['id']}|PASS:{d['name']}|VALID:TRUE"
+    ticket_qr = generate_qr(qr_payload)
 
     cab_html = f"""
     <div class="ticket-row">
         <span class="ticket-label">Cab Status</span>
         <span class="ticket-value">READY AT {d['to']}</span>
     </div>
-    <div class="ticket-row">
-        <span class="ticket-label">Drop-off</span>
-        <span class="ticket-value">{d['drop']}</span>
-    </div>
     """ if d['cab'] else ""
 
-    ticket_html = f"""
+    st.markdown(f"""
     <div class="ticket-card">
-        <div class="ticket-header">OFFICIAL BOARDING PASS</div>
+        <div class="ticket-header">BOARDING PASS</div>
         <div class="ticket-row"><span class="ticket-label">Passenger</span><span class="ticket-value">{d['name']}</span></div>
-        <div class="ticket-row"><span class="ticket-label">Journey</span><span class="ticket-value">{d['from']} ➝ {d['to']}</span></div>
+        <div class="ticket-row"><span class="ticket-label">Route</span><span class="ticket-value">{d['from']} ➝ {d['to']}</span></div>
         <div class="ticket-row"><span class="ticket-label">Qty</span><span class="ticket-value">{d['tickets']} Pax</span></div>
         {cab_html}
         <div style="text-align:center; margin-top:20px; background:#f8f9fa; padding:15px; border-radius:10px;">
-            <img src="data:image/png;base64,{qr_img}" width="180">
-            <div style="font-family:monospace; margin-top:10px;">TXN ID: {d['id']}</div>
+            <img src="data:image/png;base64,{ticket_qr}" width="180">
+            <div style="font-family:monospace; margin-top:10px; color:#888;">TXN: {d['id']}</div>
         </div>
     </div>
-    """
-    st.markdown(ticket_html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
     
-    st.write("")
-    if st.button("Book Another Ticket"):
+    if st.button("Book Another Journey"):
         reset_app()
