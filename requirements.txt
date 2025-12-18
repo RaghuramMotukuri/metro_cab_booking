@@ -1,0 +1,52 @@
+To run this "Metro & Cab Booking" application, you need to satisfy both the **environment requirements** (the libraries) and the **logic requirements** (the data inputs) defined in the script.
+
+### 1. Software & Library Requirements
+
+You must have Python installed along with the following third-party packages. You can install them all at once using `pip`:
+
+```bash
+pip install streamlit qrcode Pillow
+
+```
+
+* **`streamlit`**: The core framework used to build the web interface.
+* **`qrcode`**: Used to generate the QR code object.
+* **`Pillow` (PIL)**: Required by the `qrcode` library to render and save the QR image.
+* **Built-in Python modules**: The code also uses `time`, `io`, `base64`, and `uuid`, which are included in the standard Python library (no installation needed).
+
+---
+
+### 2. Functional Requirements (User Inputs)
+
+For the code to execute the "Booking" logic successfully, the user must provide specific data. The code includes validation checks for these:
+
+| Requirement | Purpose | Validation Logic |
+| --- | --- | --- |
+| **Passenger Name** | Identification | Cannot be empty. |
+| **Source & Destination** | Route planning | Source cannot be the same as Destination. |
+| **Ticket Count** | Capacity/Pricing | Must be a positive integer (set via `number_input`). |
+| **Cab Drop Location** | Last-mile connectivity | Only required if "Include Connecting Cab" is toggled **ON**. |
+| **Payment Success** | Transaction security | The ticket generation is locked behind a simulated payment step. |
+
+---
+
+### 3. Session State Requirements
+
+Because Streamlit scripts rerun from top to bottom every time a user interacts with a widget, this code specifically requires **Session State Management**.
+
+The app tracks three distinct states:
+
+1. **`form`**: Collecting user data.
+2. **`payment`**: Processing the transaction.
+3. **`ticket`**: Displaying the final boarding pass and QR code.
+
+Without the `st.session_state` logic, the app would "forget" the passenger's name the moment they clicked "Pay," preventing the ticket from ever being generated.
+
+---
+
+### 4. Technical Assets
+
+* **Browser Support**: Since it's a Streamlit app, it requires a modern web browser (Chrome, Firefox, Safari, or Edge).
+* **Internet Connection**: Required to initially load Streamlit components and any external CSS fonts if you add them later.
+
+**Would you like me to show you how to add a "Download Ticket" button so users can save their QR code as a PDF or Image?**
